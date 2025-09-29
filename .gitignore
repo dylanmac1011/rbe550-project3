@@ -1,0 +1,11 @@
+.vscode/
+
+# build directory, but include files expected to be there
+build/
+!build/clear_path.txt
+!build/optimal_clear_path.txt
+!build/narrow_path.txt
+!build/clear_benchmark.db
+!build/narrow_benchmark.db
+!build/clearance
+!build/optimal_clearance_path.txt
