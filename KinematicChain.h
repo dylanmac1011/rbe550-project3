@@ -48,6 +48,7 @@
 #include <boost/math/constants/constants.hpp>
 #include <boost/format.hpp>
 #include <fstream>
+#include <cmath>
 
 // a 2D line segment
 struct Segment
@@ -57,6 +58,25 @@ struct Segment
     }
     double x0, y0, x1, y1;
 };
+// Function to rotate a segment about the origin by yaw radians
+void rotateSegment(Segment& segment, const double yaw)
+{
+    double c, s;
+    c = cos(yaw);
+    s = sin(yaw);
+    x0 = segment.x0 * c - segment.y0 * s;
+    y0 = segment.x0 * s + segment.y0 * c;
+    x1 = segment.x1 * c - segment.y1 * s;
+    y1 = segment.x1 * s + segment.y1 * c;
+    segment.x0 = x0; segment.y0 = y0;
+    segment.x1 = x1; segment.y1 = y1;
+}
+
+void translateSegment(Segment& segment, const double x, const double y)
+{
+    segment.x0 += x; segment.x1 += x;
+    segment.y0 += y; segment.y0 += y;
+}
 
 // the robot and environment are modeled both as a vector of segments.
 using Environment = std::vector<Segment>;
