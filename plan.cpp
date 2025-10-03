@@ -83,28 +83,6 @@ void benchScenario2(ompl::geometric::SimpleSetup &ss)
     ompl::tools::Benchmark b(ss, "ChainBox_Clearance");
 }
 
-// Returns the sides of a square robot with the given state
-Envrionment get_robot_env(const ompl::base::SE2StateSpace::StateType& state)
-{
-    double yaw = state->getYaw();
-    double x = state->getX();
-    double y = state->getY();
-    Environment env();
-
-    // The robot at the origin
-    env.emplace_back(0.5, 0.5, -0.5, 0.5);
-    env.emplace_back(-0.5, 0.5, -0.5, -0.5);
-    env.emplace_back(-0.5, -0.5, 0.5, -0.5);
-    env.emplace_back(0.5, -0.5, 0.5, 0.5);
-
-    // Transform the robot according to provided state
-    for (auto seg : env)
-    {
-        rotateSegment(seg, yaw);
-        translateSegment(seg, x, y);
-    }
-}
-
 std::shared_ptr<ompl::base::CompoundStateSpace> createChainBoxSpace()
 {
     // Create the component spaces: 4 link manipulator + SE2 robot
@@ -116,7 +94,7 @@ std::shared_ptr<ompl::base::CompoundStateSpace> createChainBoxSpace()
     bounds.setLow(0, -5);
     bounds.setLow(1, -5);
     bounds.setHigh(0, 5);
-    bounds.setHigh(0, 5);
+    bounds.setHigh(1, 5);
     se2_space->setBounds(bounds);
 
     // Create the compound state space
@@ -127,7 +105,9 @@ std::shared_ptr<ompl::base::CompoundStateSpace> createChainBoxSpace()
 }
 void setupCollisionChecker(ompl::geometric::SimpleSetup &ss, Environment &env)
 {   //TODO Setup the stateValidity Checker
-    
+    auto si = ss.getStateInformationPtr();
+    auto checker = std::make_shared<BoxChainValidityChecker>(si);
+    ss->setValidityChecker(checker);
 }
 
     

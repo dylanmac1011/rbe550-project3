@@ -78,6 +78,26 @@ void translateSegment(Segment& segment, const double x, const double y)
     segment.y0 += y; segment.y0 += y;
 }
 
+void transformSegment(Segment& segment, const double x, const double y, const double yaw)
+{
+    rotateSegment(segment, yaw);
+    translateSegment(segment, x, y);
+}
+void transformSegment(Segment& segment, const ompl::base::SE2StateSpace::StateType *state)
+{
+    double x, y, yaw;
+    x = state->getX();
+    y = state->getY();
+    yaw = state->getYaw();
+    transformSegment(segment, x, y, yaw);
+}
+
+void transformEnv(Environment env&, const ompl::base::SE2StateSpace::StateType *state)
+{
+    for (auto &seg : env)
+        transformSegment(seg, state);
+}
+
 // the robot and environment are modeled both as a vector of segments.
 using Environment = std::vector<Segment>;
 
@@ -226,10 +246,9 @@ public:
     }
 
 protected:
-    bool isValidImpl(const KinematicChainSpace *space, const KinematicChainSpace::StateType *s) const
+    void buildArmEnv(Environment &segments, const KinematicChainSpace *space, const KinematicChainSpace::StateType *s) const
     {
         unsigned int n = si_->getStateDimension();
-        Environment segments;
         double linkLength = space->linkLength();
         double theta = 0., x = 0., y = 0., xN, yN;
 
@@ -246,6 +265,12 @@ protected:
         xN = x + cos(theta) * 0.001;
         yN = y + sin(theta) * 0.001;
         segments.emplace_back(x, y, xN, yN);
+    }
+
+    bool isValidImpl(const KinematicChainSpace *space, const KinematicChainSpace::StateType *s) const
+    {
+        Environment segments;
+        buildArmEnv(segments, space, s);
         return selfIntersectionTest(segments) && environmentIntersectionTest(segments, *space->environment());
     }
 
@@ -292,6 +317,69 @@ protected:
         if (((s_numer - denom > -std::numeric_limits<float>::epsilon()) == denomPositive) ||
             ((t_numer - denom > std::numeric_limits<float>::epsilon()) == denomPositive))
             return false;  // No collision
+        return true;
+    }
+};
+
+class BoxChainValidityChecker : public KinematicChainValidityChecker
+{
+public:
+    BoxChainValidityChecker(const ompl::base::SpaceInformationPtr &si) : ompl::base::StateValidityChecker(si)
+    {
+    }
+
+    bool isValid(const ompl::base::State *state) const override
+    {
+        // Obtain state space and state information from ompl
+        auto compound_space = si_->getStateSpace()->as<ompl::base::CompoundStateSpace();
+        auto kin_space = compound_space->getSubspace(1)->as<KinematicChainSpace>();;
+
+        auto compound_state = state->as<ompl::base::CompoundStateSpace::StateType>();
+        auto se2_state = compound_state->as<ompl::base::SE2StateSpace::StateType>(0);
+        auto kin_state = compound_state->as<KinematicChainSpace::StateType>(1);
+
+        // Build the components of the environment
+        Environment box, arm;
+        box = getBoxEnv(se2_state);
+        KinematicChainValidityChecker::buildArmEnv(arm, kin_space, kin_state);
+        transformEnv(arm, se2_state);
+
+        // Check each invalid condition
+        return KinematicChainValidityChecker::selfIntersectionTest(arm)
+            && KinematicChainValidityChecker::environmentIntersectionTest(arm, *kin_space->environment())
+            && KinematicChainValidityChecker::environmentIntersectionTest(box, *kin_space->environment())
+            && selfIntersectionTestBox(box, arm);  
+    }
+
+protected:
+    // Returns the sides of a unit square robot with the given state
+    Environment getBoxEnv(const ompl::base::SE2StateSpace::StateType& state)
+    {
+        double yaw = state->getYaw();
+        double x = state->getX();
+        double y = state->getY();
+        Environment env;
+
+        // The robot at the origin
+        env.emplace_back(0.5, 0.5, -0.5, 0.5);
+        env.emplace_back(-0.5, 0.5, -0.5, -0.5);
+        env.emplace_back(-0.5, -0.5, 0.5, -0.5);
+        env.emplace_back(0.5, -0.5, 0.5, 0.5);
+
+        // Transform the robot according to provided state
+        for (auto &seg : env)
+            transformSegment(seg, x, y, yaw);
+
+        return env;
+    }
+
+    // returns true iff box only intersects with the first link of arm
+    bool selfIntersectionTestBox(const Environment &box, const Environment &arm) const
+    {
+        for (unsigned int i = 0; i < box.size(); ++i)
+            for (unsigned int j = 1; j < arm.size(); ++j)
+                if (intersectionTest(box[i], arm[j]))
+                    return false;
         return true;
     }
 };
