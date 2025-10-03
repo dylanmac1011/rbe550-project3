@@ -1,5 +1,4 @@
 #include "KinematicChain.h"
-#include "ompl/base/spaces/SE2StateSpace.h"
 #include "ompl/base/spaces/RealVectorBounds.h"
 
 void makeScenario1(Environment &env, std::vector<double> &start, std::vector<double> &goal)
@@ -104,10 +103,10 @@ std::shared_ptr<ompl::base::CompoundStateSpace> createChainBoxSpace()
     return space;
 }
 void setupCollisionChecker(ompl::geometric::SimpleSetup &ss, Environment &env)
-{   //TODO Setup the stateValidity Checker
-    auto si = ss.getStateInformationPtr();
-    auto checker = std::make_shared<BoxChainValidityChecker>(si);
-    ss->setValidityChecker(checker);
+{
+    auto si = ss.getSpaceInformation();
+    auto checker = std::make_shared<BoxChainValidityChecker>(si, &env);
+    ss.setStateValidityChecker(checker);
 }
 
     

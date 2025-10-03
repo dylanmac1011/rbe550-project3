@@ -38,6 +38,7 @@
 #define OMPL_DEMO_KINEMATIC_CHAIN_
 
 #include <ompl/base/spaces/RealVectorStateSpace.h>
+#include "ompl/base/spaces/SE2StateSpace.h"
 #include <ompl/geometric/planners/rrt/RRT.h>
 #include <ompl/geometric/planners/kpiece/KPIECE1.h>
 #include <ompl/geometric/planners/est/EST.h>
@@ -61,7 +62,7 @@ struct Segment
 // Function to rotate a segment about the origin by yaw radians
 void rotateSegment(Segment& segment, const double yaw)
 {
-    double c, s;
+    double c, s, x0, y0, x1, y1;
     c = cos(yaw);
     s = sin(yaw);
     x0 = segment.x0 * c - segment.y0 * s;
@@ -92,14 +93,14 @@ void transformSegment(Segment& segment, const ompl::base::SE2StateSpace::StateTy
     transformSegment(segment, x, y, yaw);
 }
 
-void transformEnv(Environment env&, const ompl::base::SE2StateSpace::StateType *state)
+// the robot and environment are modeled both as a vector of segments.
+using Environment = std::vector<Segment>;
+
+void transformEnv(Environment &env, const ompl::base::SE2StateSpace::StateType *state)
 {
     for (auto &seg : env)
         transformSegment(seg, state);
 }
-
-// the robot and environment are modeled both as a vector of segments.
-using Environment = std::vector<Segment>;
 
 // simply use a random projection
 class KinematicChainProjector : public ompl::base::ProjectionEvaluator
@@ -324,14 +325,15 @@ protected:
 class BoxChainValidityChecker : public KinematicChainValidityChecker
 {
 public:
-    BoxChainValidityChecker(const ompl::base::SpaceInformationPtr &si) : ompl::base::StateValidityChecker(si)
+    BoxChainValidityChecker(const ompl::base::SpaceInformationPtr &si, Environment* env = nullptr) 
+        : KinematicChainValidityChecker(si), environment_(env)
     {
     }
 
     bool isValid(const ompl::base::State *state) const override
     {
         // Obtain state space and state information from ompl
-        auto compound_space = si_->getStateSpace()->as<ompl::base::CompoundStateSpace();
+        auto compound_space = si_->getStateSpace()->as<ompl::base::CompoundStateSpace>();
         auto kin_space = compound_space->getSubspace(1)->as<KinematicChainSpace>();;
 
         auto compound_state = state->as<ompl::base::CompoundStateSpace::StateType>();
@@ -346,14 +348,14 @@ public:
 
         // Check each invalid condition
         return KinematicChainValidityChecker::selfIntersectionTest(arm)
-            && KinematicChainValidityChecker::environmentIntersectionTest(arm, *kin_space->environment())
-            && KinematicChainValidityChecker::environmentIntersectionTest(box, *kin_space->environment())
+            && KinematicChainValidityChecker::environmentIntersectionTest(arm, *environment_)
+            && KinematicChainValidityChecker::environmentIntersectionTest(box, *environment_)
             && selfIntersectionTestBox(box, arm);  
     }
 
 protected:
     // Returns the sides of a unit square robot with the given state
-    Environment getBoxEnv(const ompl::base::SE2StateSpace::StateType& state)
+    Environment getBoxEnv(const ompl::base::SE2StateSpace::StateType* state) const
     {
         double yaw = state->getYaw();
         double x = state->getX();
@@ -382,6 +384,8 @@ protected:
                     return false;
         return true;
     }
+
+    Environment *environment_;
 };
 
 Environment createHornEnvironment(unsigned int d, double eps)
