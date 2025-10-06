@@ -50,6 +50,7 @@
 #include <boost/format.hpp>
 #include <fstream>
 #include <cmath>
+#include <iostream>
 
 // a 2D line segment
 struct Segment
@@ -76,7 +77,7 @@ void rotateSegment(Segment& segment, const double yaw)
 void translateSegment(Segment& segment, const double x, const double y)
 {
     segment.x0 += x; segment.x1 += x;
-    segment.y0 += y; segment.y0 += y;
+    segment.y0 += y; segment.y1 += y;
 }
 
 void transformSegment(Segment& segment, const double x, const double y, const double yaw)
@@ -249,7 +250,7 @@ public:
 protected:
     void buildArmEnv(Environment &segments, const KinematicChainSpace *space, const KinematicChainSpace::StateType *s) const
     {
-        unsigned int n = si_->getStateDimension();
+        unsigned int n = space->getDimension();
         double linkLength = space->linkLength();
         double theta = 0., x = 0., y = 0., xN, yN;
 
@@ -334,7 +335,7 @@ public:
     {
         // Obtain state space and state information from ompl
         auto compound_space = si_->getStateSpace()->as<ompl::base::CompoundStateSpace>();
-        auto kin_space = compound_space->getSubspace(1)->as<KinematicChainSpace>();;
+        auto kin_space = compound_space->getSubspace(1)->as<KinematicChainSpace>();
 
         auto compound_state = state->as<ompl::base::CompoundStateSpace::StateType>();
         auto se2_state = compound_state->as<ompl::base::SE2StateSpace::StateType>(0);
@@ -345,6 +346,12 @@ public:
         box = getBoxEnv(se2_state);
         KinematicChainValidityChecker::buildArmEnv(arm, kin_space, kin_state);
         transformEnv(arm, se2_state);
+
+        for (unsigned int i = 0; i < 4; ++i)
+            std::cout << kin_state->values[i] << " ";
+        std::cout << std::endl;
+        for (const auto &seg : arm)
+            std::cout << seg.x0 << "," << seg.y0 << " -> " << seg.x1 << "," << seg.y1 << std::endl;
 
         // Check each invalid condition
         return KinematicChainValidityChecker::selfIntersectionTest(arm)
@@ -357,9 +364,6 @@ protected:
     // Returns the sides of a unit square robot with the given state
     Environment getBoxEnv(const ompl::base::SE2StateSpace::StateType* state) const
     {
-        double yaw = state->getYaw();
-        double x = state->getX();
-        double y = state->getY();
         Environment env;
 
         // The robot at the origin
@@ -369,9 +373,7 @@ protected:
         env.emplace_back(0.5, -0.5, 0.5, 0.5);
 
         // Transform the robot according to provided state
-        for (auto &seg : env)
-            transformSegment(seg, x, y, yaw);
-
+        transformEnv(env, state);
         return env;
     }
 

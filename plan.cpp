@@ -68,10 +68,10 @@ void planScenario1(ompl::geometric::SimpleSetup &ss)
         ss.getSolutionPath().printAsMatrix(std::cout);
         std::ofstream outputFile;
         //clear file
-        outputFile.open("build/narrow_path.txt", std::ofstream::out | std::ofstream::trunc);
+        outputFile.open("narrow_path.txt", std::ofstream::out | std::ofstream::trunc);
         outputFile.close();
         //reopen and fill
-        outputFile.open("build/narrow_path.txt");
+        outputFile.open("narrow_path.txt");
         if (outputFile.is_open()) {
             ss.getSolutionPath().printAsMatrix(outputFile);
             outputFile.close();
@@ -102,10 +102,10 @@ void planScenario2(ompl::geometric::SimpleSetup &ss)
         ss.getSolutionPath().printAsMatrix(std::cout);
         std::ofstream outputFile;
         //clear file
-        outputFile.open("build/clear_path.txt", std::ofstream::out | std::ofstream::trunc);
+        outputFile.open("clear_path.txt", std::ofstream::out | std::ofstream::trunc);
         outputFile.close();
         //reopen and fill
-        outputFile.open("build/clear_path.txt");
+        outputFile.open("clear_path.txt");
         if (outputFile.is_open()) {
             ss.getSolutionPath().printAsMatrix(outputFile);
             outputFile.close();
@@ -126,7 +126,7 @@ void benchScenario2(ompl::geometric::SimpleSetup &ss)
 std::shared_ptr<ompl::base::CompoundStateSpace> createChainBoxSpace()
 {
     // Create the component spaces: 4 link manipulator + SE2 robot
-    auto arm_space = std::make_shared<KinematicChainSpace>(4, 1);
+    auto arm_space = std::make_shared<KinematicChainSpace>(4, 1.0);
     auto se2_space = std::make_shared<ompl::base::SE2StateSpace>();
 
     // Create the bounds of the SE2 state space
@@ -139,8 +139,8 @@ std::shared_ptr<ompl::base::CompoundStateSpace> createChainBoxSpace()
 
     // Create the compound state space
     auto space = std::make_shared<ompl::base::CompoundStateSpace>();
-    space->addSubspace(arm_space, 1.0);
     space->addSubspace(se2_space, 1.0);
+    space->addSubspace(arm_space, 1.0);
     printf("state space created successfully\n");
     return space;
 }
@@ -179,6 +179,12 @@ int main(int argc, char **argv)
         default:
             std::cerr << "Invalid Scenario Number!" << std::endl;
     }
+
+    // Add the outer boundary to the environment to prevent leaving valid region
+    env.emplace_back(5, 5, -5, 5);
+    env.emplace_back(-5, 5, -5, -5);
+    env.emplace_back(-5, -5, 5, -5);
+    env.emplace_back(5, -5, 5, 5);
 
     auto space = createChainBoxSpace();
     ompl::geometric::SimpleSetup ss(space);
