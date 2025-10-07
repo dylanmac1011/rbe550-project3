@@ -1,4 +1,4 @@
-#include "KinematicChain.h"
+#include "BoxChain.h"
 #include "ompl/base/spaces/RealVectorBounds.h"
 #include "ompl/geometric/planners/rrt/RRTConnect.h"
 #include "ompl/geometric/planners/rrt/RRTstar.h"
@@ -59,9 +59,8 @@ void makeScenario2(Environment &env, std::vector<double> &start, std::vector<dou
 void planScenario1(ompl::geometric::SimpleSetup &ss)
 {
     ss.setPlanner(std::make_shared<ompl::geometric::RRTConnect>(ss.getSpaceInformation()));
-    ss.print();
     ompl::base::PlannerStatus solved = ss.solve(20.0);
-    printf("planner ran\n");
+    
     if (solved)
     {
         std::cout << "Found solution:" << std::endl;
@@ -93,7 +92,6 @@ void planScenario2(ompl::geometric::SimpleSetup &ss)
 {
     // TODO: Plan for chain_box in the plane, with a clearance optimization objective, with an Asymptoticallly optimal planner of your choice and store the path in path2.txt
     ss.setPlanner(std::make_shared<ompl::geometric::RRTstar>(ss.getSpaceInformation()));
-    ss.print();
     ompl::base::PlannerStatus solved = ss.solve(10.0);
 
     if (solved)
@@ -141,13 +139,16 @@ std::shared_ptr<ompl::base::CompoundStateSpace> createChainBoxSpace()
     auto space = std::make_shared<ompl::base::CompoundStateSpace>();
     space->addSubspace(se2_space, 1.0);
     space->addSubspace(arm_space, 1.0);
-    printf("state space created successfully\n");
     return space;
+}
+std::shared_ptr<BoxChainSpace> createChainBoxSpace(Environment &env)
+{
+    return std::make_shared<BoxChainSpace>(&env);
 }
 void setupCollisionChecker(ompl::geometric::SimpleSetup &ss, Environment &env)
 {
     auto si = ss.getSpaceInformation();
-    auto checker = std::make_shared<BoxChainValidityChecker>(si, &env);
+    auto checker = std::make_shared<BoxChainValidityChecker>(si);
     ss.setStateValidityChecker(checker);
 }
 
@@ -180,26 +181,17 @@ int main(int argc, char **argv)
             std::cerr << "Invalid Scenario Number!" << std::endl;
     }
 
-    // Add the outer boundary to the environment to prevent leaving valid region
-    env.emplace_back(5, 5, -5, 5);
-    env.emplace_back(-5, 5, -5, -5);
-    env.emplace_back(-5, -5, 5, -5);
-    env.emplace_back(5, -5, 5, 5);
-
-    auto space = createChainBoxSpace();
+    auto space = createChainBoxSpace(env);
     ompl::geometric::SimpleSetup ss(space);
-    printf("Simple Setup instantiated\n");
     setupCollisionChecker(ss, env);
-    printf("Collision Checker Set up\n");
+
     //setup Start and Goal
     ompl::base::ScopedState<> start(space), goal(space);
-    printf("scoped states created\n");
     space->setup();
-    printf("space setup done\n");
     space->copyFromReals(start.get(), startVec);
     space->copyFromReals(goal.get(), goalVec);
     ss.setStartAndGoalStates(start, goal);
-    printf("set start and goal states\n");
+    
     switch (scenario)
     {
         case 1:

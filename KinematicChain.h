@@ -139,6 +139,33 @@ public:
         setBounds(bounds);
     }
 
+    class StateType : public ompl::base::RealVectorStateSpace::StateType
+    {
+    public:
+        void getArm(Environment &env, const KinematicChainSpace *space) const
+        {
+            env.clear();
+
+            unsigned int n = space->getDimension();
+            double linkLength = space->linkLength();
+            double theta = 0., x = 0., y = 0., xN, yN;
+
+            env.reserve(n + 1);
+            for (unsigned int i = 0; i < n; ++i)
+            {
+                theta += values[i];
+                xN = x + cos(theta) * linkLength;
+                yN = y + sin(theta) * linkLength;
+                env.emplace_back(x, y, xN, yN);
+                x = xN;
+                y = yN;
+            }
+            xN = x + cos(theta) * 0.001;
+            yN = y + sin(theta) * 0.001;
+            env.emplace_back(x, y, xN, yN);
+        }
+    };
+
     void registerProjections() override
     {
         registerDefaultProjection(std::make_shared<KinematicChainProjector>(this));
@@ -248,31 +275,10 @@ public:
     }
 
 protected:
-    void buildArmEnv(Environment &segments, const KinematicChainSpace *space, const KinematicChainSpace::StateType *s) const
-    {
-        unsigned int n = space->getDimension();
-        double linkLength = space->linkLength();
-        double theta = 0., x = 0., y = 0., xN, yN;
-
-        segments.reserve(n + 1);
-        for (unsigned int i = 0; i < n; ++i)
-        {
-            theta += s->values[i];
-            xN = x + cos(theta) * linkLength;
-            yN = y + sin(theta) * linkLength;
-            segments.emplace_back(x, y, xN, yN);
-            x = xN;
-            y = yN;
-        }
-        xN = x + cos(theta) * 0.001;
-        yN = y + sin(theta) * 0.001;
-        segments.emplace_back(x, y, xN, yN);
-    }
-
     bool isValidImpl(const KinematicChainSpace *space, const KinematicChainSpace::StateType *s) const
     {
         Environment segments;
-        buildArmEnv(segments, space, s);
+        s->getArm(segments, space);
         return selfIntersectionTest(segments) && environmentIntersectionTest(segments, *space->environment());
     }
 
@@ -321,73 +327,6 @@ protected:
             return false;  // No collision
         return true;
     }
-};
-
-class BoxChainValidityChecker : public KinematicChainValidityChecker
-{
-public:
-    BoxChainValidityChecker(const ompl::base::SpaceInformationPtr &si, Environment* env = nullptr) 
-        : KinematicChainValidityChecker(si), environment_(env)
-    {
-    }
-
-    bool isValid(const ompl::base::State *state) const override
-    {
-        // Obtain state space and state information from ompl
-        auto compound_space = si_->getStateSpace()->as<ompl::base::CompoundStateSpace>();
-        auto kin_space = compound_space->getSubspace(1)->as<KinematicChainSpace>();
-
-        auto compound_state = state->as<ompl::base::CompoundStateSpace::StateType>();
-        auto se2_state = compound_state->as<ompl::base::SE2StateSpace::StateType>(0);
-        auto kin_state = compound_state->as<KinematicChainSpace::StateType>(1);
-
-        // Build the components of the environment
-        Environment box, arm;
-        box = getBoxEnv(se2_state);
-        KinematicChainValidityChecker::buildArmEnv(arm, kin_space, kin_state);
-        transformEnv(arm, se2_state);
-
-        for (unsigned int i = 0; i < 4; ++i)
-            std::cout << kin_state->values[i] << " ";
-        std::cout << std::endl;
-        for (const auto &seg : arm)
-            std::cout << seg.x0 << "," << seg.y0 << " -> " << seg.x1 << "," << seg.y1 << std::endl;
-
-        // Check each invalid condition
-        return KinematicChainValidityChecker::selfIntersectionTest(arm)
-            && KinematicChainValidityChecker::environmentIntersectionTest(arm, *environment_)
-            && KinematicChainValidityChecker::environmentIntersectionTest(box, *environment_)
-            && selfIntersectionTestBox(box, arm);  
-    }
-
-protected:
-    // Returns the sides of a unit square robot with the given state
-    Environment getBoxEnv(const ompl::base::SE2StateSpace::StateType* state) const
-    {
-        Environment env;
-
-        // The robot at the origin
-        env.emplace_back(0.5, 0.5, -0.5, 0.5);
-        env.emplace_back(-0.5, 0.5, -0.5, -0.5);
-        env.emplace_back(-0.5, -0.5, 0.5, -0.5);
-        env.emplace_back(0.5, -0.5, 0.5, 0.5);
-
-        // Transform the robot according to provided state
-        transformEnv(env, state);
-        return env;
-    }
-
-    // returns true iff box only intersects with the first link of arm
-    bool selfIntersectionTestBox(const Environment &box, const Environment &arm) const
-    {
-        for (unsigned int i = 0; i < box.size(); ++i)
-            for (unsigned int j = 1; j < arm.size(); ++j)
-                if (intersectionTest(box[i], arm[j]))
-                    return false;
-        return true;
-    }
-
-    Environment *environment_;
 };
 
 Environment createHornEnvironment(unsigned int d, double eps)
