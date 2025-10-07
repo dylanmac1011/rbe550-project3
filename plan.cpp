@@ -17,7 +17,7 @@ void makeScenario1(Environment &env, std::vector<double> &start, std::vector<dou
     goal[0] = 2 ; 
     goal[1] = 2 ; 
     goal[2] = 0; 
-    goal[4] = -0.5*M_PI;
+    goal[4] = -1.57079;
 
     //Obstacle 1
     env.emplace_back(2, -1, 2.8, -1);
@@ -30,7 +30,6 @@ void makeScenario1(Environment &env, std::vector<double> &start, std::vector<dou
     env.emplace_back(4, -1, 4, 0.5);
     env.emplace_back(4, 0.5, 3.2, 0.5);
     env.emplace_back(3.2, 0.5, 3.2, -1);
-    printf("made scenario 1\n");
 }
 
 void makeScenario2(Environment &env, std::vector<double> &start, std::vector<double> &goal)
@@ -47,13 +46,13 @@ void makeScenario2(Environment &env, std::vector<double> &start, std::vector<dou
     goal[0] = 3; 
     goal[1] = 3; 
     goal[2] = 0; 
+    goal[4] = -1.57079;
 
     //Obstacle 1
     env.emplace_back(-1, -1, 1, -1);
     env.emplace_back(1, -1, 1, 1);
     env.emplace_back(1, 1, -1, 1);
     env.emplace_back(-1, 1, -1, -1);
-    printf("made scenario 2\n");
 }
 
 void planScenario1(ompl::geometric::SimpleSetup &ss)
@@ -90,8 +89,9 @@ void benchScenario1(ompl::geometric::SimpleSetup &ss)
 
 void planScenario2(ompl::geometric::SimpleSetup &ss)
 {
-    // TODO: Plan for chain_box in the plane, with a clearance optimization objective, with an Asymptoticallly optimal planner of your choice and store the path in path2.txt
-    ss.setPlanner(std::make_shared<ompl::geometric::RRTstar>(ss.getSpaceInformation()));
+    auto si = ss.getSpaceInformation();
+    ss.setPlanner(std::make_shared<ompl::geometric::RRTstar>(si));
+    ss.setOptimizationObjective(std::make_shared<BoxChainClearanceObjective>(si));
     ompl::base::PlannerStatus solved = ss.solve(10.0);
 
     if (solved)

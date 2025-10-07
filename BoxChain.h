@@ -95,17 +95,17 @@ public:
         auto state = s->as<BoxChainSpace::StateType>();
 
         // Build the components of the environment
-        Environment box, arm;
+        Environment box, chain;
         state->getBox(box);
-        state->getChain(box, space->getChainSpace());
+        state->getChain(chain, space->getChainSpace());
 
         // Check each invalid condition
-        return KinematicChainValidityChecker::selfIntersectionTest(arm)
-            && KinematicChainValidityChecker::environmentIntersectionTest(arm, *space->environment())
+        return KinematicChainValidityChecker::selfIntersectionTest(chain)
+            && KinematicChainValidityChecker::environmentIntersectionTest(chain, *space->environment())
             && KinematicChainValidityChecker::environmentIntersectionTest(box, *space->environment())
-            && KinematicChainValidityChecker::environmentIntersectionTest(arm, *space->boundary())
+            && KinematicChainValidityChecker::environmentIntersectionTest(chain, *space->boundary())
             && KinematicChainValidityChecker::environmentIntersectionTest(box, *space->boundary()) 
-            && selfIntersectionTestBox(box, arm);  
+            && selfIntersectionTestBox(box, chain);  
     }
 
 protected:
@@ -126,8 +126,8 @@ protected:
 class BoxChainClearanceObjective : public ompl::base::OptimizationObjective
 {
 public:
-    BoxChainClearanceObjective(const ompl::base::SpaceInformationPtr &si)
-        : OptimizationObjective(si)
+    BoxChainClearanceObjective(const ompl::base::SpaceInformationPtr &si, bool use_center = true)
+        : OptimizationObjective(si), use_center_(use_center)
     {}
 
     ompl::base::Cost stateCost(const ompl::base::State *s) const override
@@ -135,17 +135,33 @@ public:
         auto space = si_->getStateSpace()->as<BoxChainSpace>();
         auto state = s->as<BoxChainSpace::StateType>();
 
+        // We invert the distance since OMPL minimizes the cost by default
+        // Add 1 to normalize to between 0 and 1
+        double min_dist = use_center_ ? costFromCenter(state, space) : costFromAll(state, space);
+        return ompl::base::Cost(1.0 / (1.0 + min_dist));
+    }
+
+    ompl::base::Cost motionCost(const ompl::base::State *s1, const ompl::base::State *s2) const override
+    {
+        return ompl::base::Cost(std::min(stateCost(s1).value(), stateCost(s2).value()));
+    }
+
+protected:
+    double costFromCenter(const BoxChainSpace::StateType* state, const BoxChainSpace* space)
+    {
+        auto pos = state->getSE2State();
+        return distToEnv(*space->environment(), pos.getX(), pos.getY());
+    }
+
+    double costFromAll(const BoxChainSpace::StateType* state, const BoxChainSpace* space)
+    {
         Environment box, chain;
         state->getBox(box);
         state->getChain(chain, space->getChainSpace());
 
-        // We invert the distance since OMPL minimizes the cost by default
-        // Add 1 to avoid severe numerical approximation error when close to obstacles
-        double min_dist = std::min(distEnv(chain, *space->environment()), distEnv(box, *space->environment()));
-        return ompl::base::Cost(1.0 / (1.0 + min_dist));
+        return std::min(distEnv(chain, *space->environment()), distEnv(box, *space->environment()));
     }
 
-protected:
     // return the minimum distance between 2 envrionments
     double distEnv(const Environment &env1, const Environment &env2) const
     {
@@ -189,6 +205,8 @@ protected:
         dx = x - cx; dy = y - cy;
         return std::sqrt(dx*dx + dy*dy);
     }
+
+    bool use_center_;
 };
 
 
