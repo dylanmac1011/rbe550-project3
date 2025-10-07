@@ -130,13 +130,65 @@ public:
         : OptimizationObjective(si)
     {}
 
-    ompl::base::Cost stateCost(const ompl::base::State *state) const override
+    ompl::base::Cost stateCost(const ompl::base::State *s) const override
     {
-        return ompl::base::Cost(0.0);
+        auto space = si_->getStateSpace()->as<BoxChainSpace>();
+        auto state = s->as<BoxChainSpace::StateType>();
+
+        Environment box, chain;
+        state->getBox(box);
+        state->getChain(chain, space->getChainSpace());
+
+        // We invert the distance since OMPL minimizes the cost by default
+        // Add 1 to avoid severe numerical approximation error when close to obstacles
+        double min_dist = std::min(distEnv(chain, *space->environment()), distEnv(box, *space->environment()));
+        return ompl::base::Cost(1.0 / (1.0 + min_dist));
     }
 
 protected:
-    
+    // return the minimum distance between 2 envrionments
+    double distEnv(const Environment &env1, const Environment &env2) const
+    {
+        double min_dist = std::numeric_limits<double>::infinity();
+        for (const auto &seg : env1)
+            min_dist = std::min(min_dist, distSegEnv(env2, seg));
+        return min_dist;
+    }
+
+    // return the minimum distance between a segment and environment
+    double distSegEnv(const Environment &env, const Segment &seg) const
+    {
+        return std::min(distToEnv(env, seg.x0, seg.y0), distToEnv(env, seg.x1, seg.y1));        
+    }
+
+    // Return the minimum distance between a point and environment
+    double distToEnv(const Environment &env, double x, double y) const
+    {
+        double min_dist = std::numeric_limits<double>::infinity();
+        for (const auto& seg : env)
+            min_dist = std::min(min_dist, distToSeg(seg, x, y));
+        return min_dist;
+    }
+
+    // Return the minimum distance between a line segment and a point
+    double distToSeg(const Segment& seg, double x, double y) const
+    {
+        double dx = seg.x1 - seg.x0, dy = seg.y1 - seg.y0;
+        double numer = (x - seg.x0) * dx + (y - seg.y0) * dy;
+        double denom = dx*dx + dy*dy;
+        if (denom == 0)
+        {   // Segment is just a point
+            dx = x - seg.x0; dy = y - seg.y0;
+            return std::sqrt(dx*dx + dy*dy);
+        }
+        double t = numer / denom;
+        t = std::max(0.0, std::min(t, 1.0));
+
+        // Closest point on the segment
+        double cx = seg.x0 + t*dx, cy = seg.y0 + t*dy;
+        dx = x - cx; dy = y - cy;
+        return std::sqrt(dx*dx + dy*dy);
+    }
 };
 
 

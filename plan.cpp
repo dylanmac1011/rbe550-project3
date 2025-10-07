@@ -121,6 +121,7 @@ void benchScenario2(ompl::geometric::SimpleSetup &ss)
     ompl::tools::Benchmark b(ss, "ChainBox_Clearance");
 }
 
+// Orriginal version without ChainBoxSpace
 std::shared_ptr<ompl::base::CompoundStateSpace> createChainBoxSpace()
 {
     // Create the component spaces: 4 link manipulator + SE2 robot
@@ -141,6 +142,7 @@ std::shared_ptr<ompl::base::CompoundStateSpace> createChainBoxSpace()
     space->addSubspace(arm_space, 1.0);
     return space;
 }
+// Better object oriented version
 std::shared_ptr<BoxChainSpace> createChainBoxSpace(Environment &env)
 {
     return std::make_shared<BoxChainSpace>(&env);
