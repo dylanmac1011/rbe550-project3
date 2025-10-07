@@ -126,8 +126,9 @@ protected:
 class BoxChainClearanceObjective : public ompl::base::OptimizationObjective
 {
 public:
-    BoxChainClearanceObjective(const ompl::base::SpaceInformationPtr &si, bool use_center = true)
-        : OptimizationObjective(si), use_center_(use_center)
+    BoxChainClearanceObjective(const ompl::base::SpaceInformationPtr &si, const bool use_center = true, 
+                               const unsigned int interp_pts = 0)
+        : OptimizationObjective(si), use_center_(use_center), interp_pts_(interp_pts)
     {}
 
     ompl::base::Cost stateCost(const ompl::base::State *s) const override
@@ -141,19 +142,36 @@ public:
         return ompl::base::Cost(1.0 / (1.0 + min_dist));
     }
 
+    ompl::base::Cost combineCosts(const ompl::base::Cost c1, const ompl::base::Cost c2) const override {
+        return ompl::base::Cost(std::max(c1.value(), c2.value()));
+    }
+
     ompl::base::Cost motionCost(const ompl::base::State *s1, const ompl::base::State *s2) const override
     {
-        return ompl::base::Cost(std::min(stateCost(s1).value(), stateCost(s2).value()));
+        // Get worst case cost as aggregate. Inverse distance -> max()
+        double max_cost = std::max(stateCost(s1).value(), stateCost(s2).value());
+        if (!interp_pts_)
+            return ompl::base::Cost(max_cost);
+
+        auto is = si_->allocState();
+        auto space = si_->getStateSpace()->as<BoxChainSpace>();
+        for (unsigned int i = 0; i < interp_pts_; ++i)
+        {
+            space->interpolate(s1, s2, (i + 1.0)/(interp_pts_ + 1.0), is);
+            max_cost = std::max(stateCost(is).value(), max_cost);
+        }
+        si_->freeState(is);
+        return ompl::base::Cost(max_cost);
     }
 
 protected:
-    double costFromCenter(const BoxChainSpace::StateType* state, const BoxChainSpace* space)
+    double costFromCenter(const BoxChainSpace::StateType* state, const BoxChainSpace* space) const
     {
-        auto pos = state->getSE2State();
+        auto &pos = state->getSE2State();
         return distToEnv(*space->environment(), pos.getX(), pos.getY());
     }
 
-    double costFromAll(const BoxChainSpace::StateType* state, const BoxChainSpace* space)
+    double costFromAll(const BoxChainSpace::StateType* state, const BoxChainSpace* space) const
     {
         Environment box, chain;
         state->getBox(box);
@@ -166,8 +184,11 @@ protected:
     double distEnv(const Environment &env1, const Environment &env2) const
     {
         double min_dist = std::numeric_limits<double>::infinity();
+        // Need to check both because SegEnv checks the endpoints only :/
         for (const auto &seg : env1)
             min_dist = std::min(min_dist, distSegEnv(env2, seg));
+        for (const auto &seg : env2)
+            min_dist = std::min(min_dist, distSegEnv(env1, seg));
         return min_dist;
     }
 
@@ -192,7 +213,7 @@ protected:
         double dx = seg.x1 - seg.x0, dy = seg.y1 - seg.y0;
         double numer = (x - seg.x0) * dx + (y - seg.y0) * dy;
         double denom = dx*dx + dy*dy;
-        if (denom == 0)
+        if (denom < std::numeric_limits<double>::epsilon())
         {   // Segment is just a point
             dx = x - seg.x0; dy = y - seg.y0;
             return std::sqrt(dx*dx + dy*dy);
@@ -207,6 +228,7 @@ protected:
     }
 
     bool use_center_;
+    unsigned int interp_pts_;
 };
 
 

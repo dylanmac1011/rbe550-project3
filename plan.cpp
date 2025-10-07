@@ -1,7 +1,18 @@
 #include "BoxChain.h"
+
 #include "ompl/base/spaces/RealVectorBounds.h"
 #include "ompl/geometric/planners/rrt/RRTConnect.h"
 #include "ompl/geometric/planners/rrt/RRTstar.h"
+#include <ompl/geometric/planners/rrt/RRTsharp.h>
+#include <ompl/geometric/planners/prm/PRM.h>
+#include <ompl/geometric/planners/prm/PRMstar.h>
+#include <ompl/tools/benchmark/Benchmark.h>
+
+#include <ompl/base/samplers/BridgeTestValidStateSampler.h>
+#include <ompl/base/samplers/GaussianValidStateSampler.h>
+#include <ompl/base/samplers/MaximizeClearanceValidStateSampler.h>
+#include <ompl/base/samplers/ObstacleBasedValidStateSampler.h>
+#include <ompl/base/samplers/UniformValidStateSampler.h>
 
 void makeScenario1(Environment &env, std::vector<double> &start, std::vector<double> &goal)
 {
@@ -80,54 +91,46 @@ void planScenario1(ompl::geometric::SimpleSetup &ss)
 
 void benchScenario1(ompl::geometric::SimpleSetup &ss)
 {
-    //TODO: Benchmark PRM with uniform, bridge, gaussian, and obstacle-based Sampling. Do 20 trials with 20 seconds each 
+    // Benchmark PRM with uniform, bridge, gaussian, and obstacle-based Sampling. Do 20 trials with 20 seconds each 
     double runtime_limit = 20, memory_limit = 1024;
     int run_count = 20;
     ompl::tools::Benchmark::Request request(runtime_limit, memory_limit, run_count, 0.5);
     ompl::tools::Benchmark b(ss, "ChainBox_Narrow");
-    b.addPlanner(std::make_shared<geometric::RRT>(ss.getSpaceInformation()));
-    b.addPlanner(std::make_shared<geometric::RRTConnect>(ss.getSpaceInformation()));
-    b.addPlanner(std::make_shared<geometric::PRM>(ss.getSpaceInformation()));
-    // run all planners with a uniform valid state sampler on the benchmark problem
+    b.addPlanner(std::make_shared<ompl::geometric::PRM>(ss.getSpaceInformation()));
+
+    // run with a uniform valid state sampler on the benchmark problem
     ss.getSpaceInformation()->setValidStateSamplerAllocator(
-        [](const base::SpaceInformation *si) -> base::ValidStateSamplerPtr {
-            return std::make_shared<base::UniformValidStateSampler>(si);
+        [](const ompl::base::SpaceInformation *si) -> ompl::base::ValidStateSamplerPtr {
+            return std::make_shared<ompl::base::UniformValidStateSampler>(si);
         });
     b.addExperimentParameter("sampler_id", "INTEGER", "0");
     b.benchmark(request);
     b.saveResultsToFile();
-    // run all planners with a Gaussian valid state sampler on the benchmark problem
+
+    // run with a Gaussian valid state sampler on the benchmark problem
     ss.getSpaceInformation()->setValidStateSamplerAllocator(
-        [](const base::SpaceInformation *si) -> base::ValidStateSamplerPtr {
-            return std::make_shared<base::GaussianValidStateSampler>(si);
+        [](const ompl::base::SpaceInformation *si) -> ompl::base::ValidStateSamplerPtr {
+            return std::make_shared<ompl::base::GaussianValidStateSampler>(si);
         });
     b.addExperimentParameter("sampler_id", "INTEGER", "1");
     b.benchmark(request);
     b.saveResultsToFile();
-    // run all planners with a obstacle-based valid state sampler on the benchmark problem
+
+    // run with a obstacle-based valid state sampler on the benchmark problem
     ss.getSpaceInformation()->setValidStateSamplerAllocator(
-        [](const base::SpaceInformation *si) -> base::ValidStateSamplerPtr {
-            return std::make_shared<base::ObstacleBasedValidStateSampler>(si);
+        [](const ompl::base::SpaceInformation *si) -> ompl::base::ValidStateSamplerPtr {
+            return std::make_shared<ompl::base::ObstacleBasedValidStateSampler>(si);
         });
     b.addExperimentParameter("sampler_id", "INTEGER", "2");
     b.benchmark(request);
     b.saveResultsToFile();
-    // run all planners with a maximum-clearance valid state sampler on the benchmark problem
+
+    // run with a bridge-test valid state sampler on the benchmark problem
     ss.getSpaceInformation()->setValidStateSamplerAllocator(
-        [](const base::SpaceInformation *si) -> base::ValidStateSamplerPtr {
-            auto vss = std::make_shared<base::MaximizeClearanceValidStateSampler>(si);
-            vss->setNrImproveAttempts(5);
-            return vss;
+        [](const ompl::base::SpaceInformation *si) -> ompl::base::ValidStateSamplerPtr {
+            return std::make_shared<ompl::base::BridgeTestValidStateSampler>(si);
         });
     b.addExperimentParameter("sampler_id", "INTEGER", "3");
-    b.benchmark(request);
-    b.saveResultsToFile();
-    // run all planners with a bridge-test valid state sampler on the benchmark problem
-    ss.getSpaceInformation()->setValidStateSamplerAllocator(
-        [](const base::SpaceInformation *si) -> base::ValidStateSamplerPtr {
-            return std::make_shared<base::BridgeTestValidStateSampler>(si);
-        });
-    b.addExperimentParameter("sampler_id", "INTEGER", "4");
     b.benchmark(request);
     b.saveResultsToFile();
 
@@ -161,59 +164,45 @@ void planScenario2(ompl::geometric::SimpleSetup &ss)
 
 void benchScenario2(ompl::geometric::SimpleSetup &ss)
 {
-    //TODO: Benchmark RRT*, PRM*, RRT# for 10 trials with 60 secounds timeout.
+    // Benchmark RRT*, PRM*, RRT# for 10 trials with 60 secounds timeout.
     double runtime_limit = 60, memory_limit = 1024;
     int run_count = 10;
     ompl::tools::Benchmark::Request request(runtime_limit, memory_limit, run_count, 0.5);
     ompl::tools::Benchmark b(ss, "ChainBox_Clearance");
-    b.addPlanner(std::make_shared<geometric::RRTsharp>(ss.getSpaceInformation()));
-    b.addPlanner(std::make_shared<geometric::RRTstar>(ss.getSpaceInformation()));
-    b.addPlanner(std::make_shared<geometric::PRMstar>(ss.getSpaceInformation()));
-    // run all planners with a uniform valid state sampler on the benchmark problem
-    ss.getSpaceInformation()->setValidStateSamplerAllocator(
-        [](const base::SpaceInformation *si) -> base::ValidStateSamplerPtr {
-            return std::make_shared<base::UniformValidStateSampler>(si);
-        });
-    b.addExperimentParameter("sampler_id", "INTEGER", "0");
-    b.benchmark(request);
-    b.saveResultsToFile();
-    // run all planners with a Gaussian valid state sampler on the benchmark problem
-    ss.getSpaceInformation()->setValidStateSamplerAllocator(
-        [](const base::SpaceInformation *si) -> base::ValidStateSamplerPtr {
-            return std::make_shared<base::GaussianValidStateSampler>(si);
-        });
-    b.addExperimentParameter("sampler_id", "INTEGER", "1");
-    b.benchmark(request);
-    b.saveResultsToFile();
-    // run all planners with a obstacle-based valid state sampler on the benchmark problem
-    ss.getSpaceInformation()->setValidStateSamplerAllocator(
-        [](const base::SpaceInformation *si) -> base::ValidStateSamplerPtr {
-            return std::make_shared<base::ObstacleBasedValidStateSampler>(si);
-        });
-    b.addExperimentParameter("sampler_id", "INTEGER", "2");
-    b.benchmark(request);
-    b.saveResultsToFile();
-    // run all planners with a maximum-clearance valid state sampler on the benchmark problem
-    ss.getSpaceInformation()->setValidStateSamplerAllocator(
-        [](const base::SpaceInformation *si) -> base::ValidStateSamplerPtr {
-            auto vss = std::make_shared<base::MaximizeClearanceValidStateSampler>(si);
-            vss->setNrImproveAttempts(5);
-            return vss;
-        });
-    b.addExperimentParameter("sampler_id", "INTEGER", "3");
-    b.benchmark(request);
-    b.saveResultsToFile();
-    // run all planners with a bridge-test valid state sampler on the benchmark problem
-    ss.getSpaceInformation()->setValidStateSamplerAllocator(
-        [](const base::SpaceInformation *si) -> base::ValidStateSamplerPtr {
-            return std::make_shared<base::BridgeTestValidStateSampler>(si);
-        });
-    b.addExperimentParameter("sampler_id", "INTEGER", "4");
-    b.benchmark(request);
-    b.saveResultsToFile();
 
+    b.addPlanner(std::make_shared<ompl::geometric::RRTsharp>(ss.getSpaceInformation()));
+    b.addPlanner(std::make_shared<ompl::geometric::RRTstar>(ss.getSpaceInformation()));
+    b.addPlanner(std::make_shared<ompl::geometric::PRMstar>(ss.getSpaceInformation()));
+    
+    b.benchmark(request);
+    b.saveResultsToFile();
     return;
- }
+}
+
+void planClearanceChallenge(ompl::geometric::SimpleSetup &ss)
+{
+    auto si = ss.getSpaceInformation();
+    ss.setPlanner(std::make_shared<ompl::geometric::RRTsharp>(si));
+    ss.setOptimizationObjective(std::make_shared<BoxChainClearanceObjective>(si, false, 19));
+    ompl::base::PlannerStatus solved = ss.solve(320.0);
+
+    if (solved)
+    {
+        std::cout << "Found solution:" << std::endl;
+        ss.getSolutionPath().printAsMatrix(std::cout);
+        std::ofstream outputFile;
+        //clear file
+        outputFile.open("optimal_clearance_path.txt", std::ofstream::out | std::ofstream::trunc);
+        outputFile.close();
+        //reopen and fill
+        outputFile.open("optimal_clearance_path.txt");
+        if (outputFile.is_open()) {
+            ss.getSolutionPath().printAsMatrix(outputFile);
+            outputFile.close();
+        } else {std::cerr << "Unable to open path file" << std::endl;}
+    }
+    else{std::cout << "No solution found" << std::endl;} 
+}
 
 // Orriginal version without ChainBoxSpace
 std::shared_ptr<ompl::base::CompoundStateSpace> createChainBoxSpace()
@@ -261,6 +250,7 @@ int main(int argc, char **argv)
         std::cout << "Plan for: " << std::endl;
         std::cout << " (1) Robot Reaching Task" << std::endl;
         std::cout << " (2) Robot Avoiding Task" << std::endl;
+        std::cout << " (3) Robot Clearance Challenge" <<std::endl;
 
         std::cin >> scenario;
     } while (scenario < 1 || scenario > 3);
@@ -271,6 +261,7 @@ int main(int argc, char **argv)
             makeScenario1(env, startVec, goalVec);
             break;
         case 2:
+        case 3:
             makeScenario2(env, startVec, goalVec);
             break;
         default:
@@ -297,6 +288,9 @@ int main(int argc, char **argv)
         case 2:
             planScenario2(ss);
             benchScenario2(ss);
+            break;
+        case 3:
+            planClearanceChallenge(ss);
             break;
         default:
             std::cerr << "Invalid Scenario Number!" << std::endl;
